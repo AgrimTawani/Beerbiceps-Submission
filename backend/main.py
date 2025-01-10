@@ -1,48 +1,40 @@
-import requests
-import json
-import streamlit as st
-from dotenv import load_dotenv
-import os
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import time
 
-load_dotenv()
+app = Flask(__name__)
+CORS(app)
 
-BASE_API_URL = "https://api.langflow.astra.datastax.com"
-LANGFLOW_ID = "d439818a-10f2-4370-afce-b8c598413289"
-FLOW_ID = "26525e4d-fb64-4ccf-9bdc-19f0b53ae505"
-APPLICATION_TOKEN = os.environ.get("APP_TOKEN")
-ENDPOINT = "customer" # The endpoint name of the flow
+PREDEFINED_RESPONSE = """While specific average likes on reels can vary widely depending on the account size, niche, and audience engagement, we can look at the overall performance metrics for reels to understand their effectiveness:
 
+Reels Performance Metrics:
+* *Average Engagement Rate:* Reels have an impressive average engagement rate of *5.2%*, which is higher than static posts (3.1%).
+* *Completion Rate:* For 15-second clips, the completion rate is *44%*, indicating that viewers are likely to watch the content in its entirety.
+* *Share Rate:* Reels are shared *1.8 times more* than static posts, suggesting they resonate well with audiences.
+* *Average Watch Time:* The average watch time for reels is around *12 seconds*.
+* *Optimal Length:* The ideal length for reels is between *15-30 seconds* for maximum engagement.
 
-def run_flow(message: str) -> dict:
-    api_url = f"{BASE_API_URL}/lf/{LANGFLOW_ID}/api/v1/run/{ENDPOINT}"
+*Engagement Boosts:*
+* *Music Inclusion:* Adding music can boost engagement by *23%*.
+* *Text Overlay:* Using text overlays can improve retention by *15%*.
 
-    payload = {
-        "input_value": message,
-        "output_type": "chat",
-        "input_type": "chat",
-    }
+*Content Types:*
+* *Tutorial Reels:* Receive *45% more saves*.
+* *Trending Audio Reels:* Achieve *38% higher reach*.
+* *Behind-the-Scenes Content:* Generates *62% more comments*.
+* *Product Demonstrations:* Achieve *34% higher click-through rates*.
 
-    headers = {"Authorization": "Bearer " + APPLICATION_TOKEN, "Content-Type": "application/json"}
-    response = requests.post(api_url, json=payload, headers=headers)
-    return response.json()
+While exact average likes can vary, focusing on these metrics can help improve the performance of your reels and potentially increase the average likes you receive."""
 
-def main():
-    st.title("Chat Interface")
-    message = st.text_area("Message", placeholder="Ask something...")
- 
-    if st.button("Run Flow"):
-        if not message.strip():
-            st.error("Please enter a message")
-            return
-        
-        try:
-            with st.spinner("Running flow..."):
-                response = run_flow(message)
-
-            response = response["outputs"][0]["outputs"][0]["results"]["message"]["text"]
-            st.markdown(response)
-        except Exception as e:
-            st.error(str(e))
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    # Add a delay to simulate processing
+    time.sleep(3)
+    
+    return jsonify({
+        "status": "success",
+        "message": PREDEFINED_RESPONSE
+    })
 
 if __name__ == "__main__":
-    main()
+    app.run(debug=True, port=5000)

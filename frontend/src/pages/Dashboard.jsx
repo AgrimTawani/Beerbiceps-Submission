@@ -1,137 +1,248 @@
-import { 
-  LineChart, Line, AreaChart, Area, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
+// Dashboard.jsx
+import React, { useState, useEffect } from 'react';
+import {
+  LineChart, Line, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  ComposedChart
 } from 'recharts';
 
-const Dashboard = () => {
-  // Mock data for follower growth
-  const followerData = [
-    { month: 'Jan', followers: 2400 },
-    { month: 'Feb', followers: 3600 },
-    { month: 'Mar', followers: 4800 },
-    { month: 'Apr', followers: 5200 },
-    { month: 'May', followers: 7000 },
-    { month: 'Jun', followers: 8900 }
-  ];
+const Dashboard = ({ isDarkMode }) => {
+  const [data, setData] = useState([]);
+  const [metrics, setMetrics] = useState({
+    avgEngagement: 0,
+    totalReach: 0,
+    totalImpressions: 0,
+    reactionTotals: {},
+    hourlyStats: {}
+  });
 
-  // Mock data for engagement rate
-  const engagementData = [
-    { day: 'Mon', rate: 4.5 },
-    { day: 'Tue', rate: 5.2 },
-    { day: 'Wed', rate: 6.8 },
-    { day: 'Thu', rate: 4.9 },
-    { day: 'Fri', rate: 7.2 },
-    { day: 'Sat', rate: 8.1 },
-    { day: 'Sun', rate: 7.5 }
-  ];
+  // Function to sample data while maintaining distribution
+  const sampleData = (data, sampleSize = 1000) => {
+    if (data.length <= sampleSize) return data;
+    
+    const sortedData = [...data].sort((a, b) => 
+      new Date(a.posted_at) - new Date(b.posted_at)
+    );
 
-  // Mock data for content performance
-  const contentData = [
-    { type: 'Photos', posts: 45 },
-    { type: 'Videos', posts: 30 },
-    { type: 'Reels', posts: 25 },
-    { type: 'Stories', posts: 80 }
-  ];
+    const step = Math.floor(data.length / sampleSize);
+    const sampledData = [];
+    
+    for (let i = 0; i < data.length && sampledData.length < sampleSize; i += step) {
+      sampledData.push(sortedData[i]);
+    }
 
-  // Mock data for audience demographics
-  const demographicsData = [
-    { name: '18-24', value: 30 },
-    { name: '25-34', value: 40 },
-    { name: '35-44', value: 20 },
-    { name: '45+', value: 10 }
-  ];
+    if (sampledData.length < sampleSize) {
+      const remainingData = sortedData.filter(item => !sampledData.includes(item));
+      const remainingNeeded = sampleSize - sampledData.length;
+      
+      for (let i = 0; i < remainingNeeded; i++) {
+        const randomIndex = Math.floor(Math.random() * remainingData.length);
+        sampledData.push(remainingData.splice(randomIndex, 1)[0]);
+      }
+    }
 
-  const COLORS = ['#8B5CF6', '#7C3AED', '#6D28D9', '#5B21B6'];
+    return sampledData;
+  };
+
+  useEffect(() => {
+    fetch('/csvjson.json')
+      .then(response => response.json())
+      .then(jsonData => {
+        const sampledData = sampleData(jsonData, 1000);
+        setData(sampledData);
+        calculateMetrics(sampledData);
+      })
+      .catch(error => console.error('Error loading data:', error));
+  }, []);
+
+  const calculateMetrics = (data) => {
+    const totalPosts = data.length;
+    
+    const metrics = data.reduce((acc, post) => ({
+      avgEngagement: acc.avgEngagement + post.engagement_rate,
+      totalReach: acc.totalReach + post.reach,
+      totalImpressions: acc.totalImpressions + post.impressions,
+      reactionTotals: {
+        likes: (acc.reactionTotals.likes || 0) + post.like_count,
+        loves: (acc.reactionTotals.loves || 0) + post.love_count,
+        hahas: (acc.reactionTotals.hahas || 0) + post.haha_count,
+        wows: (acc.reactionTotals.wows || 0) + post.wow_count,
+        sads: (acc.reactionTotals.sads || 0) + post.sad_count,
+        angrys: (acc.reactionTotals.angrys || 0) + post.angry_count,
+      }
+    }), {
+      avgEngagement: 0,
+      totalReach: 0,
+      totalImpressions: 0,
+      reactionTotals: {}
+    });
+
+    const hourlyStats = data.reduce((acc, post) => {
+      const hour = post.hour;
+      if (!acc[hour]) {
+        acc[hour] = {
+          hour,
+          engagement: 0,
+          posts: 0,
+          reach: 0
+        };
+      }
+      acc[hour].engagement += post.engagement_rate;
+      acc[hour].posts += 1;
+      acc[hour].reach += post.reach;
+      return acc;
+    }, {});
+
+    metrics.hourlyStats = Object.values(hourlyStats).map(stat => ({
+      ...stat,
+      avgEngagement: (stat.engagement / stat.posts).toFixed(2)
+    }));
+
+    setMetrics({
+      ...metrics,
+      avgEngagement: (metrics.avgEngagement / totalPosts).toFixed(2),
+      hourlyStats
+    });
+  };
+
+  const COLORS = {
+    primary: '#8B5CF6',
+    secondary: '#34D399',
+    tertiary: '#FBBF24',
+    quaternary: '#EC4899',
+    accent: '#3B82F6'
+  };
+
+  const reactionData = Object.entries(metrics.reactionTotals).map(([key, value]) => ({
+    name: key.charAt(0).toUpperCase() + key.slice(1),
+    value
+  }));
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-8">Instagram Analytics Dashboard</h1>
-        
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { title: 'Total Followers', value: '8,900', change: '+12.5%' },
-            { title: 'Avg. Engagement', value: '6.3%', change: '+2.1%' },
-            { title: 'Total Posts', value: '180', change: '+15' },
-            { title: 'Reach', value: '25.4K', change: '+8.9%' }
-          ].map((stat, index) => (
-            <div key={index} className="bg-gray-900 p-4 rounded-lg">
-              <h3 className="text-gray-400 text-sm">{stat.title}</h3>
-              <p className="text-2xl font-bold mt-1">{stat.value}</p>
-              <span className="text-green-500 text-sm">{stat.change}</span>
-            </div>
-          ))}
+    <div className={`min-h-screen p-6 ${isDarkMode ? 'bg-black   text-white' : 'bg-gray-50 text-gray-900'}`}>
+      <h1 className="text-3xl font-bold mb-8">Instagram Analytics Dashboard</h1>
+
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h3 className="text-lg mb-2">Total Reach</h3>
+          <p className="text-2xl font-bold">{metrics.totalReach.toLocaleString()}</p>
+        </div>
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h3 className="text-lg mb-2">Total Impressions</h3>
+          <p className="text-2xl font-bold">{metrics.totalImpressions.toLocaleString()}</p>
+        </div>
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h3 className="text-lg mb-2">Avg Engagement Rate</h3>
+          <p className="text-2xl font-bold">{metrics.avgEngagement}%</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Engagement by Post Type */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Engagement by Post Type</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="post_type" />
+              <YAxis yAxisId="left" />
+              <YAxis yAxisId="right" orientation="right" />
+              <Tooltip />
+              <Legend />
+              <Bar yAxisId="left" dataKey="engagement_rate" fill={COLORS.primary} name="Engagement Rate" />
+              <Line yAxisId="right" type="monotone" dataKey="reach" stroke={COLORS.secondary} name="Reach" />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Follower Growth */}
-          <div className="bg-gray-900 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4">Follower Growth</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={followerData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="month" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
-                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: 'none' }} />
-                <Area type="monotone" dataKey="followers" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Reaction Distribution */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Reaction Distribution</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={reactionData}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                outerRadius={100}
+                label
+              >
+                {reactionData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={Object.values(COLORS)[index % Object.values(COLORS).length]} />
+                ))}
+              </Pie>
+              <Tooltip />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
 
-          {/* Engagement Rate */}
-          <div className="bg-gray-900 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4">Daily Engagement Rate</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={engagementData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="day" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
-                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: 'none' }} />
-                <Line type="monotone" dataKey="rate" stroke="#8B5CF6" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Hourly Engagement Patterns */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Hourly Engagement Patterns</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={Object.values(metrics.hourlyStats)}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="hour" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="avgEngagement" stroke={COLORS.accent} name="Avg Engagement" />
+              <Line type="monotone" dataKey="reach" stroke={COLORS.quaternary} name="Reach" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
 
-          {/* Content Distribution */}
-          <div className="bg-gray-900 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4">Content Distribution</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={contentData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="type" stroke="#9CA3AF" />
-                <YAxis stroke="#9CA3AF" />
-                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: 'none' }} />
-                <Bar dataKey="posts" fill="#8B5CF6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Video Performance Metrics */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Video Performance</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data.filter(post => post.post_type === 'video')}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="post_id" />
+              <YAxis yAxisId="left" />
+              <YAxis yAxisId="right" orientation="right" />
+              <Tooltip />
+              <Legend />
+              <Bar yAxisId="left" dataKey="video_views" fill={COLORS.primary} name="Views" />
+              <Bar yAxisId="right" dataKey="avg_watch_time" fill={COLORS.secondary} name="Avg Watch Time (s)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
 
-          {/* Audience Demographics */}
-          <div className="bg-gray-900 p-4 rounded-lg">
-            <h2 className="text-xl font-semibold mb-4">Audience Age Distribution</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={demographicsData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value }) => `${name} (${value}%)`}
-                  outerRadius={100}
-                  fill="#8B5CF6"
-                  dataKey="value"
-                >
-                  {demographicsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: 'none' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Reach vs Impressions */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Reach vs Impressions</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="post_type" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Area type="monotone" dataKey="reach" stackId="1" stroke={COLORS.primary} fill={COLORS.primary} name="Reach" />
+              <Area type="monotone" dataKey="impressions" stackId="2" stroke={COLORS.secondary} fill={COLORS.secondary} name="Impressions" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Page Clicks Analysis */}
+        <div className={`p-6 rounded-lg shadow-lg ${isDarkMode ? 'bg-gray-800' : 'bg-white'}`}>
+          <h2 className="text-xl font-semibold mb-4">Page Clicks by Post Type</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="post_type" />
+              <YAxis />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="page_clicks" fill={COLORS.tertiary} name="Page Clicks" />
+              <Line type="monotone" dataKey="engagement_rate" stroke={COLORS.quaternary} name="Engagement Rate" />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
